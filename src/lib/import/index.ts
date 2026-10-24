@@ -1,0 +1,8 @@
+export { parseMultiSectionCSV, parseSectionsCSV, parseDictionaryCSV, parseDuplicatesCSV, columnLetterToIndex } from './csvParser'
+export { analyzeImport } from './analyzer'
+export { classifyImportDecision, computeFingerprint, computeFingerprintFromBuffer, checkDuplicateImport, executeImport, executeWorkbookImport, executeDocumentImport, rollbackImportBatch, selectTestBatch } from './engine'
+export type { ImportDecision, ImportProgress, ImportResult, ImportRecordResult, ImportPhase } from './engine'
+export { parseXLSXFile, classifySheet, getDocCategoryForSheet } from './xlsxParser'
+export { normalizeWorkbook } from './workbookNormalizer'
+export { createTrainingFixture, runPreflight, longestPrefixAssetTypeMatch } from './training'
+export type { PreflightResult } from './training'

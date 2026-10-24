@@ -1,0 +1,8 @@
+[functions.ai-structure-note]
+verify_jwt = true
+
+[functions.ai-chat-query]
+verify_jwt = true
+
+[functions.send-invitation-email]
+verify_jwt = true

@@ -1,0 +1,17 @@
+{
+  "projectId": "72326058",
+  "functions": {
+    "ai-chat-query": {
+      "hasChanged": false,
+      "hash": "8470f3d59a2519628dd038592406555e352c43758efc438398bb3b3cf74f6a0d"
+    },
+    "ai-structure-note": {
+      "hasChanged": false,
+      "hash": "3f28a36def84eee5d80c1ae7ed321adec2ad4e36e0edcd185b8b3f65d84e36b5"
+    },
+    "send-invitation-email": {
+      "hasChanged": false,
+      "hash": "2494dc824026a1e8f74dc89f10249fa49ca47a4c8559318b23e2d12e7bc62cc7"
+    }
+  }
+}

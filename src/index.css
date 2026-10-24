@@ -1,0 +1,137 @@
+@import "tailwindcss";
+
+@theme {
+  /* Sunset orange palette */
+  --color-primary-50: #fff7ed;
+  --color-primary-100: #ffedd5;
+  --color-primary-200: #fed7aa;
+  --color-primary-300: #fdba74;
+  --color-primary-400: #fb923c;
+  --color-primary-500: #f97316;
+  --color-primary-600: #ea580c;
+  --color-primary-700: #c2410c;
+  --color-primary-800: #9a3412;
+  --color-primary-900: #7c2d12;
+  --color-primary-950: #431407;
+
+  --color-success-50: #f0fdf4;
+  --color-success-100: #dcfce7;
+  --color-success-400: #4ade80;
+  --color-success-500: #22c55e;
+  --color-success-600: #16a34a;
+  --color-success-700: #15803d;
+
+  --color-warning-50: #fefce8;
+  --color-warning-100: #fef9c3;
+  --color-warning-500: #eab308;
+  --color-warning-600: #ca8a04;
+  --color-warning-700: #a16207;
+
+  --color-error-50: #fef2f2;
+  --color-error-100: #fee2e2;
+  --color-error-200: #fecaca;
+  --color-error-400: #f87171;
+  --color-error-500: #ef4444;
+  --color-error-600: #dc2626;
+  --color-error-700: #b91c1c;
+  --color-error-800: #991b1b;
+
+  /* Warm neutral palette */
+  --color-neutral-50: #fefdfb;
+  --color-neutral-100: #fdf8f3;
+  --color-neutral-200: #f5ebe0;
+  --color-neutral-300: #e8ddd0;
+  --color-neutral-400: #b5a898;
+  --color-neutral-500: #8c7e6e;
+  --color-neutral-600: #665a4c;
+  --color-neutral-700: #4a4038;
+  --color-neutral-800: #332c26;
+  --color-neutral-900: #1f1a16;
+  --color-neutral-950: #0f0d0a;
+
+  --font-sans: 'DM Sans', system-ui, -apple-system, sans-serif;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #fefdfb;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Sunset gradient backgrounds */
+.bg-sunset {
+  background: linear-gradient(
+    160deg,
+    #fefdfb 0%,
+    #fff7ed 25%,
+    #ffedd5 50%,
+    #fed7aa 75%,
+    #fef3c7 100%
+  );
+}
+
+.bg-sunset-vivid {
+  background: linear-gradient(
+    160deg,
+    #fff7ed 0%,
+    #ffedd5 20%,
+    #fdba74 45%,
+    #fb923c 65%,
+    #f97316 85%,
+    #ea580c 100%
+  );
+}
+
+.bg-sunset-hero {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(
+    135deg,
+    #1f1a16 0%,
+    #431407 25%,
+    #9a3412 45%,
+    #ea580c 65%,
+    #fb923c 80%,
+    #fde68a 100%
+  );
+}
+
+.bg-sunset-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 30% 80%, rgba(251, 146, 60, 0.4) 0%, transparent 60%),
+              radial-gradient(ellipse at 70% 20%, rgba(253, 186, 116, 0.3) 0%, transparent 50%);
+}
+
+.bg-sunset-soft {
+  background: linear-gradient(
+    180deg,
+    #fefdfb 0%,
+    #fff7ed 40%,
+    #ffedd5 100%
+  );
+}
