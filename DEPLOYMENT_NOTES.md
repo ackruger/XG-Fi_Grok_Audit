@@ -16,17 +16,14 @@ This package includes the troubleshooting/security fixes plus the latest UI chan
 
 ## Supabase deployment
 
-Apply the new migration:
+Apply the latest migrations (especially the security-hardening ones).
 
-`supabase/migrations/20260922000000_050_security_and_access_fixes.sql`
-
-Redeploy these Edge Functions:
+Redeploy these Edge Functions after any change:
 
 - `supabase/functions/ai-chat-query`
 - `supabase/functions/send-invitation-email`
 
-The existing `dist/` build is intentionally not included in the final ZIP. Rebuild from source during deployment.
-
+Rebuild the frontend from source on deploy. Do not rely on a committed `dist/` folder.
 
 ## QR / NFC deep-link configuration
 
@@ -38,11 +35,23 @@ Do not program NFC tags from a temporary Bolt preview URL. The stored URL format
 
 The existing `public/_redirects` SPA fallback must remain in the build so a fresh browser navigation to `/q/:token` loads the React app and resolves the asset.
 
-## Invitation email APP_URL secret
+## Invitation email (Resend)
 
-The `send-invitation-email` edge function uses an `APP_URL` secret to build the sign-in link in invitation emails. Add it in the Bolt Secrets tab (database icon > Secrets):
+The `send-invitation-email` Edge Function sends via Resend. Required secrets (Bolt Secrets or Supabase Edge Function secrets):
 
-- **Name**: `APP_URL`
-- **Value**: the same permanent HTTPS origin as `VITE_PUBLIC_APP_URL` (e.g. `https://your-app.bolt.host`)
+| Secret | Purpose |
+|--------|---------|
+| `RESEND_API_KEY` | Resend API key (`re_...`) |
+| `RESEND_FROM` | Verified From address, e.g. `NovusNow <commercial@novusnow.ca>` |
+| `APP_URL` | Permanent HTTPS origin used in the email link (same as `VITE_PUBLIC_APP_URL`) |
+
+### Why emails fail
+
+1. **Domain not verified in Resend** — the From domain (`novusnow.ca` or whatever you use) must be verified in the Resend dashboard (DNS records added). Until then Resend returns 403/422.
+2. **`RESEND_API_KEY` missing or invalid**.
+3. **`APP_URL` not set** — function returns 503 before attempting to send.
+4. **From address mismatch** — `RESEND_FROM` must be an address on a verified domain.
+
+After the latest update the function returns the actual Resend error body (truncated) in the response `detail` field and logs it. Check the Edge Function logs or the UI error for the exact reason.
 
 If `APP_URL` is not set, the edge function returns a 503 error instead of sending an email with a wrong link.
