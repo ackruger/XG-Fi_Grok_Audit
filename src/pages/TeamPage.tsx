@@ -126,12 +126,19 @@ export default function TeamPage() {
 
   async function handleCancelInvitation(invitationId: string) {
     setNotice(null)
-    const { error } = await supabase.rpc('revoke_facility_invitation', { p_invitation_id: invitationId })
-    if (error) {
-      setNotice({ tone: 'error', text: `Could not cancel the invitation: ${error.message}` })
-      return
+    try {
+      const { data, error } = await supabase.rpc('revoke_facility_invitation', { p_invitation_id: invitationId })
+      if (error) throw error
+      if (data !== true) {
+        setNotice({ tone: 'info', text: 'This invitation is no longer pending. The team list has been refreshed.' })
+        await loadTeamData()
+        return
+      }
+      setInvitations(prev => prev.filter(i => i.id !== invitationId))
+    } catch (error) {
+      console.error('Invitation cancellation failed', error)
+      setNotice({ tone: 'error', text: 'Could not cancel the invitation. Check that you have permission and try again.' })
     }
-    setInvitations(prev => prev.filter(i => i.id !== invitationId))
   }
 
   if (loading) {
