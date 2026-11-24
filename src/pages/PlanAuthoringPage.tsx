@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, Trash2, Pencil, Check, Loader2, MapPin, FileText, Layers, Save } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { isSafeHttpUrl, safeHref } from '../lib/safeUrl'
 import { useFacility } from '../context/FacilityContext'
 import { useAuth } from '../context/AuthContext'
 import type { PlanDocument, PlanRevision, PlanMarker, Asset } from '../types'
@@ -75,6 +76,7 @@ export default function PlanAuthoringPage() {
 
   async function handleCreateDoc() {
     if (!newDocName.trim() || !currentFacility) { setError('Name is required'); return }
+    if (newDocUrl.trim() && !isSafeHttpUrl(newDocUrl)) { setError('Link must be an http or https URL'); return }
     setCreatingDoc(true)
     setError('')
     const { data, error: err } = await supabase.from('plan_documents')
@@ -91,6 +93,7 @@ export default function PlanAuthoringPage() {
 
   async function handleCreateRev() {
     if (!newRevNumber.trim() || !selectedDoc) return
+    if (newRevUrl.trim() && !isSafeHttpUrl(newRevUrl)) { setError('Link must be an http or https URL'); return }
     setCreatingRev(true)
     await supabase.from('plan_revisions').update({ is_current: false }).eq('plan_document_id', selectedDoc.id).eq('is_current', true)
     const { data } = await supabase.from('plan_revisions')
@@ -268,7 +271,7 @@ export default function PlanAuthoringPage() {
                       {r.page_count != null && <span className="text-xs text-neutral-500">{r.page_count} pages</span>}
                       {r.is_current ? <span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full">Current</span>
                         : canEdit && <button onClick={() => setCurrentRev(r)} className="text-xs text-primary-600 hover:text-primary-700">Set Current</button>}
-                      {r.external_url && <a href={r.external_url} target="_blank" rel="noopener noreferrer" className="text-xs text-sky-500 ml-auto">Open</a>}
+                      {r.external_url && <a href={safeHref(r.external_url)} target="_blank" rel="noopener noreferrer" className="text-xs text-sky-500 ml-auto">Open</a>}
                     </div>
                   ))}
                 </div>

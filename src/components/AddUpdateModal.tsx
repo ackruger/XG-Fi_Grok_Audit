@@ -64,6 +64,7 @@ export default function AddUpdateModal({ asset, onClose, onComplete }: Props) {
         },
         body: JSON.stringify({
           raw_note: noteText,
+          facility_id: asset.facility_id,
           asset_name: asset.equipment_name,
           asset_type: asset.equipment_type,
           current_status: asset.status,

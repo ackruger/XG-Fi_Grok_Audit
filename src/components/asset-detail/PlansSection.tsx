@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Map, MapPin } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { safeHref } from '../../lib/safeUrl'
 import type { PlanDocument, PlanMarker } from '../../types'
 
 export default function PlansSection({ assetId, facilityId }: { assetId: string; facilityId: string; canEdit: boolean }) {
@@ -57,7 +58,7 @@ export default function PlansSection({ assetId, facilityId }: { assetId: string;
                   </p>
                 </div>
                 {marker.plan_documents?.external_url && (
-                  <a href={marker.plan_documents.external_url} target="_blank" rel="noreferrer"
+                  <a href={safeHref(marker.plan_documents.external_url)} target="_blank" rel="noreferrer"
                     className="text-xs text-primary-600 hover:text-primary-700 shrink-0">Open Plan</a>
                 )}
               </div>
@@ -84,7 +85,7 @@ export default function PlansSection({ assetId, facilityId }: { assetId: string;
                   <p className="text-sm font-medium text-neutral-800 truncate">{plan.name}</p>
                 </div>
                 {plan.external_url ? (
-                  <a href={plan.external_url} target="_blank" rel="noreferrer"
+                  <a href={safeHref(plan.external_url)} target="_blank" rel="noreferrer"
                     className="text-xs text-primary-600 hover:text-primary-700 shrink-0">Open</a>
                 ) : (
                   <span className="text-xs text-neutral-400 shrink-0">No URL</span>

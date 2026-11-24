@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Plus, AlertTriangle, Camera, Clock, User, QrCode, Download, X, Pencil, StickyNote, Send, Trash2, Upload, MessageCircle, Zap, Wrench, Link2, FileText, Settings, Copy, Check, ShieldAlert, ListChecks, Map, ChevronRight, MoreHorizontal, Lock } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { safeHref } from '../lib/safeUrl'
 import type { Asset, Event, Issue, Photo, AssetNote, Tag, ActivityPost, LotoRecord, Case } from '../types'
 import AddUpdateModal from '../components/AddUpdateModal'
 import CreateIssueModal from '../components/CreateIssueModal'
@@ -967,7 +968,7 @@ function DocumentCategoryView({ assetId, category, canEdit: _canEdit }: { assetI
                   </div>
                 </div>
                 {doc.documents?.external_url || doc.documents?.file_url ? (
-                  <a href={doc.documents?.external_url || doc.documents?.file_url} target="_blank" rel="noreferrer"
+                  <a href={safeHref(doc.documents?.external_url) || safeHref(doc.documents?.file_url)} target="_blank" rel="noreferrer"
                     className="text-xs text-primary-600 hover:text-primary-700 shrink-0 ml-2">Open</a>
                 ) : (
                   <span className="text-xs text-neutral-400 shrink-0 ml-2">No URL</span>

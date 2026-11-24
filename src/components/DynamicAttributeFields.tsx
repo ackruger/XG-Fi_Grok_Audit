@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { ExternalLink } from 'lucide-react'
 import type { AssetAttributeDefinition, AttributeAppSection } from '../types'
+import { safeHref } from '../lib/safeUrl'
 
 const SECTION_LABELS: Record<AttributeAppSection, string> = {
   technical: 'Technical / Design',
@@ -81,7 +82,7 @@ function ReadOnlyValue({ value, def }: { value: string; def: AssetAttributeDefin
   }
   if (def.data_type === 'url' && value) {
     return (
-      <a href={value} target="_blank" rel="noopener noreferrer" className="text-sm text-primary-600 hover:underline inline-flex items-center gap-1">
+      <a href={safeHref(value)} target="_blank" rel="noopener noreferrer" className="text-sm text-primary-600 hover:underline inline-flex items-center gap-1">
         {value}
         <ExternalLink size={12} />
       </a>
@@ -176,7 +177,7 @@ function FieldInput({
           <input type="url" value={value} onChange={(e) => onChange(def.id, e.target.value)} placeholder="https://…" className={INPUT_CLS} />
           {value && (
             <a
-              href={value}
+              href={safeHref(value)}
               target="_blank"
               rel="noopener noreferrer"
               className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-primary-500"

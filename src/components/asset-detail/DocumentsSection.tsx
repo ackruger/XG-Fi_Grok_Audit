@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Upload, Link2, FileText, Download, Trash2, ExternalLink, X, Plus } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { isSafeHttpUrl, safeHref } from '../../lib/safeUrl'
 import type { DocumentCategory } from '../../types'
 
 interface DocumentRow {
@@ -94,7 +95,7 @@ export default function DocumentsSection({ assetId, facilityId, canEdit }: Props
   useEffect(() => { load() }, [load])
 
   async function handleView(doc: DocumentRow) {
-    if (doc.external_url) { window.open(doc.external_url, '_blank', 'noopener'); return }
+    if (doc.external_url) { const href = safeHref(doc.external_url); if (href) window.open(href, '_blank', 'noopener'); return }
     if (doc.storage_path) {
       const { data } = await supabase.storage.from('asset-documents').createSignedUrl(doc.storage_path, 3600)
       if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener')
@@ -389,7 +390,7 @@ function LinkModal({ assetId, facilityId, onClose, onComplete }: { assetId: stri
   async function handleSubmit() {
     if (!url.trim()) { setError('Please enter a URL.'); return }
     if (!name.trim()) { setError('Please enter a name.'); return }
-    try { new URL(url.trim()) } catch { setError('Please enter a valid URL.'); return }
+    if (!isSafeHttpUrl(url)) { setError('Please enter a valid http or https URL.'); return }
     setSubmitting(true); setError('')
     try {
       const { data: doc, error: docErr } = await supabase

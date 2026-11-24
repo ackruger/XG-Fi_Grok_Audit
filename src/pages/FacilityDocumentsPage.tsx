@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { FileText, ExternalLink, Search, Filter, Download, ChevronDown, Upload, Link2, Plus, X, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { isSafeHttpUrl, safeHref } from '../lib/safeUrl'
 import { useFacility } from '../context/FacilityContext'
 import type { DocumentCategory } from '../types'
 
@@ -93,7 +94,7 @@ export default function FacilityDocumentsPage() {
   useEffect(() => { load() }, [load])
 
   async function handleView(doc: DocumentRow) {
-    if (doc.external_url) { window.open(doc.external_url, '_blank', 'noopener'); return }
+    if (doc.external_url) { const href = safeHref(doc.external_url); if (href) window.open(href, '_blank', 'noopener'); return }
     if (doc.storage_path) {
       const { data } = await supabase.storage.from('asset-documents').createSignedUrl(doc.storage_path, 3600)
       if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener')
@@ -434,7 +435,7 @@ function LinkModal({ facilityId, onClose, onComplete }: { facilityId: string; on
   async function handleSubmit() {
     if (!url.trim()) { setError('Please enter a URL.'); return }
     if (!name.trim()) { setError('Please enter a name.'); return }
-    try { new URL(url.trim()) } catch { setError('Please enter a valid URL.'); return }
+    if (!isSafeHttpUrl(url)) { setError('Please enter a valid http or https URL.'); return }
     setSubmitting(true); setError('')
     try {
       const { error: docErr } = await supabase

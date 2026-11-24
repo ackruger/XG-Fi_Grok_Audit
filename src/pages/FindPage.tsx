@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Html5Qrcode } from 'html5-qrcode'
 import { Camera, Search, X, Upload, QrCode, Link2, Plus, Check, Map, ScanLine } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { safeHref } from '../lib/safeUrl'
 import { useFacility } from '../context/FacilityContext'
 
 type FindMode = 'menu' | 'scan' | 'search'
@@ -396,7 +397,7 @@ export default function FindPage() {
                     <p className="text-sm font-medium text-neutral-800 truncate">{plan.name}</p>
                   </div>
                   {plan.external_url ? (
-                    <a href={plan.external_url} target="_blank" rel="noreferrer"
+                    <a href={safeHref(plan.external_url)} target="_blank" rel="noreferrer"
                       className="text-xs text-primary-600 hover:text-primary-700 shrink-0 ml-2">Go to Plan</a>
                   ) : (
                     <span className="text-xs text-neutral-400 shrink-0 ml-2">No URL</span>
@@ -421,7 +422,7 @@ export default function FindPage() {
                               className="text-xs text-primary-600 hover:text-primary-700 font-medium">Open Asset</button>
                           )}
                           {plan.external_url && (
-                            <a href={plan.external_url} target="_blank" rel="noreferrer"
+                            <a href={safeHref(plan.external_url)} target="_blank" rel="noreferrer"
                               className="text-xs text-neutral-500 hover:text-neutral-700 font-medium">Plan</a>
                           )}
                         </div>

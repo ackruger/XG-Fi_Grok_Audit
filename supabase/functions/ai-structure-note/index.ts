@@ -7,6 +7,19 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const MAX_NOTE_CHARS = 2000;
+const MAX_FIELD_CHARS = 200;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+const clip = (v: unknown) => (typeof v === "string" ? v.slice(0, MAX_FIELD_CHARS) : "");
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -14,42 +27,40 @@ Deno.serve(async (req: Request) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    if (!authHeader) return json({ error: "Unauthorized" }, 401);
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (authError || !user) return json({ error: "Unauthorized" }, 401);
+
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return json({ error: "Request body must be valid JSON" }, 400);
     }
 
-    const { raw_note, asset_name, asset_type, current_status, location } = await req.json();
+    const rawNote = typeof body.raw_note === "string" ? body.raw_note : "";
+    if (!rawNote.trim()) return json({ error: "raw_note is required" }, 400);
+    if (rawNote.length > MAX_NOTE_CHARS) {
+      return json({ error: `Field note is too long (max ${MAX_NOTE_CHARS} characters)` }, 400);
+    }
 
-    if (!raw_note) {
-      return new Response(
-        JSON.stringify({ error: "raw_note is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    const facilityId = typeof body.facility_id === "string" ? body.facility_id : "";
+    if (!UUID_RE.test(facilityId)) return json({ error: "A valid facility_id is required" }, 400);
+
+    const { data: role, error: roleError } = await supabase.rpc("get_facility_role", {
+      p_facility_id: facilityId,
+      p_user_id: user.id,
+    });
+    if (roleError || typeof role !== "string" || !role) {
+      return json({ error: "Forbidden: not a member of this facility" }, 403);
     }
 
     const openaiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!openaiKey) {
-      return new Response(
-        JSON.stringify({ error: "OpenAI API key not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    if (!openaiKey) return json({ error: "The AI assistant is not available right now." }, 503);
 
     const systemPrompt = `You are a field documentation assistant for construction and commissioning projects. Your job is to parse raw field notes into structured data.
 
@@ -67,12 +78,12 @@ Given a field note about an asset, extract and return a JSON object with these f
 
 Return ONLY valid JSON, no markdown or explanation.`;
 
-    const userPrompt = `Asset: ${asset_name || "Unknown"}
-Type: ${asset_type || "Unknown"}
-Current Status: ${current_status || "Unknown"}
-Location: ${location || "Unknown"}
+    const userPrompt = `Asset: ${clip(body.asset_name) || "Unknown"}
+Type: ${clip(body.asset_type) || "Unknown"}
+Current Status: ${clip(body.current_status) || "Unknown"}
+Location: ${clip(body.location) || "Unknown"}
 
-Field Note: "${raw_note}"`;
+Field Note: "${rawNote}"`;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -92,11 +103,9 @@ Field Note: "${raw_note}"`;
     });
 
     if (!response.ok) {
-      const errBody = await response.text();
-      return new Response(
-        JSON.stringify({ error: "OpenAI API error", details: errBody }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      // Keep upstream details in the server logs only.
+      console.error("ai-structure-note upstream error", response.status, await response.text().catch(() => ""));
+      return json({ error: "The AI assistant could not structure this note. Please try again." }, 502);
     }
 
     const data = await response.json();
@@ -109,14 +118,9 @@ Field Note: "${raw_note}"`;
       structured = { raw_response: content, error: "Failed to parse AI response" };
     }
 
-    return new Response(
-      JSON.stringify(structured),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return json(structured);
   } catch (err) {
-    return new Response(
-      JSON.stringify({ error: (err as Error).message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    console.error("ai-structure-note failed", err);
+    return json({ error: "The AI assistant could not structure this note. Please try again." }, 500);
   }
 });
