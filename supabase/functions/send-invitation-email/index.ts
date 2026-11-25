@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { corsHeaders, handleInvite } from "./core.ts";
 
-const FROM_ADDRESS = "NovusNow <commercial@novusnow.ca>";
+const FROM_ADDRESS = "Xg-Fi <admin@xeitgeist.ca>";
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
