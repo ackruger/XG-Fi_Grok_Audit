@@ -27,9 +27,16 @@ export default function InvitationSetupPage() {
 
   useEffect(() => {
     let active = true
+    setChecking(true)
+    setInvitation(null)
+    setError('')
+    setFirstName('')
+    setLastName('')
+    setPassword('')
+    setConfirmPassword('')
     void Promise.resolve(supabase.rpc('lookup_facility_invitation', { p_token: token })).then(({ data, error: lookupError }) => {
       if (!active) return
-      if (lookupError || !data || typeof data.email !== 'string' || typeof data.facility_name !== 'string') {
+      if (lookupError || !data || typeof data.email !== 'string' || typeof data.facility_name !== 'string' || typeof data.expires_at !== 'string') {
         setError('This invitation is invalid, expired or already used. Ask your administrator to resend it.')
       } else setInvitation(data)
       setChecking(false)
@@ -110,6 +117,7 @@ export default function InvitationSetupPage() {
           </form>
         </>}
         {error && <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm leading-relaxed text-red-800">{error}</p>}
+        {!checking && <button type="button" disabled={busy} onClick={() => navigate('/')} className="mt-4 w-full py-2 text-sm font-medium text-primary-700 disabled:opacity-60">Return to Xg-Fi</button>}
       </div>
     </div>
   )
