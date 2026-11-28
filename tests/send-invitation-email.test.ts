@@ -20,6 +20,7 @@ function makeDeps(overrides: Partial<InviteDeps> = {}) {
     getUser: async () => ({ id: 'user-1', email: 'boss@example.com' }),
     getFacilityRole: async () => 'admin',
     findPendingInvitation: async () => ({ id: 'inv-1' }),
+    issueInvitationToken: async () => 'a'.repeat(64),
     getFacilityName: async () => 'Plant <script>alert(1)</script>',
     getInviterName: async () => 'Eve "the" <b>Admin</b>',
     countSenderSends: async () => 0,
@@ -79,13 +80,14 @@ test('buildInviteEmail escapes names and includes the trusted sign-in link', () 
     role: 'admin',
     email: 'x@example.com',
     appOrigin: 'https://app.example.com',
+    token: 'a'.repeat(64),
   })
   assert.ok(!msg.html.includes('<img src=x'))
   assert.ok(msg.html.includes('&lt;img src=x onerror=alert(1)&gt;'))
   assert.ok(msg.html.includes('A &amp; B'))
-  assert.ok(msg.html.includes('href="https://app.example.com/dashboard"'))
-  assert.equal(msg.signInUrl, 'https://app.example.com/dashboard')
-  assert.ok(msg.text.includes('https://app.example.com/dashboard'))
+  assert.ok(msg.html.includes('href="https://app.example.com/accept-invitation#token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"'))
+  assert.equal(msg.signInUrl, 'https://app.example.com/accept-invitation#token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+  assert.ok(msg.text.includes('https://app.example.com/accept-invitation#token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'))
 })
 
 test('sends with server-resolved names and ignores caller Origin and names', async () => {
@@ -99,7 +101,7 @@ test('sends with server-resolved names and ignores caller Origin and names', asy
   assert.ok(!html.includes('<script>'))
   assert.ok(html.includes('Plant &lt;script&gt;'))
   assert.ok(html.includes('Eve &quot;the&quot; &lt;b&gt;Admin&lt;/b&gt;'))
-  assert.ok(html.includes('https://app.example.com/dashboard'))
+  assert.ok(html.includes('https://app.example.com/accept-invitation#token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'))
   assert.ok(!html.includes('evil.example'))
   assert.equal(sent[0].to, 'new.person@example.com')
   assert.deepEqual(finished, [{ status: 'sent', error: null }])
@@ -113,7 +115,7 @@ test('rejects unauthenticated callers without sending', async () => {
 })
 
 test('rejects callers without manage rights and supervisors inviting admins', async () => {
-  for (const role of [null, 'viewer', 'contributor', 'reviewer']) {
+  for (const role of [null, 'viewer', 'contributor', 'reviewer', 'supervisor']) {
     const { deps, sent } = makeDeps({ getFacilityRole: async () => role })
     const res = await handleInvite(request(validBody), deps)
     assert.equal(res.status, 403)

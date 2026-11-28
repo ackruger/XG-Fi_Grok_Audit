@@ -69,11 +69,12 @@ export function buildInviteEmail(input: {
   role: string;
   email: string;
   appOrigin: string;
+  token: string;
 }): { subject: string; html: string; text: string; signInUrl: string } {
   const facility = stripControl(input.facilityName).slice(0, 200) || "a facility";
   const inviter = stripControl(input.inviterName).slice(0, 200) || "A team member";
   const roleLabel = ROLE_LABELS[input.role] ?? "Member";
-  const signInUrl = `${input.appOrigin}/dashboard`;
+  const signInUrl = `${input.appOrigin}/accept-invitation#token=${encodeURIComponent(input.token)}`;
   const f = escapeHtml(facility);
   const i = escapeHtml(inviter);
   const e = escapeHtml(input.email);
@@ -88,14 +89,14 @@ export function buildInviteEmail(input: {
 <tr><td style="background:#0f172a;padding:28px 32px;"><h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">You're invited to join ${f}</h1></td></tr>
 <tr><td style="padding:32px;">
 <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.6;"><strong>${i}</strong> has invited you to join <strong>${f}</strong> as a <strong>${r}</strong>.</p>
-<p style="margin:0 0 24px;color:#334155;font-size:15px;line-height:1.6;">Sign in or create an account using <strong>${e}</strong> and the invitation will be applied automatically.</p>
-<p style="margin:0 0 24px;"><a href="${link}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 24px;border-radius:8px;">Sign in to accept</a></p>
+<p style="margin:0 0 24px;color:#334155;font-size:15px;line-height:1.6;">Set up your account using <strong>${e}</strong>, or sign in with that email to accept. This single-use invitation expires in seven days.</p>
+<p style="margin:0 0 24px;"><a href="${link}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 24px;border-radius:8px;">Accept invitation</a></p>
 <p style="margin:0;color:#64748b;font-size:13px;line-height:1.5;">Or open this address: ${link}</p>
 </td></tr>
 <tr><td style="padding:20px 32px;border-top:1px solid #e2e8f0;"><p style="margin:0;color:#94a3b8;font-size:12px;">If you weren't expecting this invitation, you can ignore this email.</p></td></tr>
 </table></td></tr></table></body></html>`;
 
-  const text = `${inviter} has invited you to join ${facility} as a ${roleLabel}.\n\nSign in or create an account using ${input.email} and the invitation will be applied automatically:\n${signInUrl}\n\nIf you weren't expecting this invitation, you can ignore this email.`;
+  const text = `${inviter} has invited you to join ${facility} as a ${roleLabel}.\n\nSet up your account or sign in using ${input.email}. This single-use invitation expires in seven days:\n${signInUrl}\n\nIf you weren't expecting this invitation, you can ignore this email.`;
 
   return { subject: `You're invited to join ${facility}`.slice(0, 200), html, text, signInUrl };
 }
@@ -108,6 +109,7 @@ export type InviteDeps = {
   getUser: () => Promise<{ id: string; email: string | null } | null>;
   getFacilityRole: (facilityId: string, userId: string) => Promise<string | null>;
   findPendingInvitation: (q: { facilityId: string; email: string; role: string; invitedBy: string }) => Promise<{ id: string } | null>;
+  issueInvitationToken: (invitationId: string) => Promise<string>;
   getFacilityName: (facilityId: string) => Promise<string | null>;
   getInviterName: (userId: string) => Promise<string | null>;
   countSenderSends: (senderId: string, sinceIso: string) => Promise<number>;
@@ -147,11 +149,8 @@ export async function handleInvite(req: Request, deps: InviteDeps): Promise<Resp
     const { email, role, facilityId } = parsed.value;
 
     const callerRole = await deps.getFacilityRole(facilityId, user.id);
-    if (callerRole !== "admin" && callerRole !== "supervisor") {
+    if (callerRole !== "admin") {
       return json({ error: "You do not have permission to invite members to this facility" }, 403);
-    }
-    if (callerRole === "supervisor" && role === "admin") {
-      return json({ error: "Supervisors cannot invite admins" }, 403);
     }
 
     const invitation = await deps.findPendingInvitation({ facilityId, email, role, invitedBy: user.id });
@@ -176,12 +175,14 @@ export async function handleInvite(req: Request, deps: InviteDeps): Promise<Resp
     const appOrigin = resolveAppOrigin(deps.appUrl);
     if (!appOrigin) return json({ error: "APP_URL is not configured. Set it to the published app URL." }, 503 );
 
+    const token = await deps.issueInvitationToken(invitation.id);
     const message = buildInviteEmail({
       facilityName,
       inviterName: inviterName || user.email || "A team member",
       role,
       email,
       appOrigin,
+      token,
     });
 
     const logId = await deps.logSend({ invitationId: invitation.id, senderId: user.id, facilityId });

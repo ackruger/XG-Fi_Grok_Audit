@@ -32,19 +32,23 @@ Deno.serve(async (req: Request) => {
         if (error) return null;
         return typeof data === "string" ? data : null;
       },
-      findPendingInvitation: async ({ facilityId, email, role, invitedBy }) => {
+      findPendingInvitation: async ({ facilityId, email, role }) => {
         const { data, error } = await authClient
           .from("facility_invitations")
           .select("id")
           .eq("facility_id", facilityId)
           .eq("email", email)
           .eq("role", role)
-          .eq("invited_by", invitedBy)
           .eq("status", "pending")
           .order("created_at", { ascending: false })
           .limit(1);
         if (error || !data || data.length === 0) return null;
         return { id: data[0].id as string };
+      },
+      issueInvitationToken: async (invitationId) => {
+        const { data, error } = await authClient.rpc('issue_facility_invitation_token', { p_invitation_id: invitationId });
+        if (error || typeof data !== 'string') throw new Error('Could not prepare invitation');
+        return data;
       },
       getFacilityName: async (facilityId) => {
         const { data, error } = await serviceClient.from("facilities").select("name").eq("id", facilityId).maybeSingle();
@@ -83,7 +87,8 @@ Deno.serve(async (req: Request) => {
         return data.id as string;
       },
       finishSend: async (id, status, errorText) => {
-        await serviceClient.from("invitation_email_sends").update({ status, error: errorText }).eq("id", id);
+        const { error } = await serviceClient.from("invitation_email_sends").update({ status, error: errorText }).eq("id", id);
+        if (error) throw new Error('Could not finish send log');
       },
       sendEmail: async ({ to, subject, html, text }, signal) => {
         const res = await fetch("https://api.resend.com/emails", {

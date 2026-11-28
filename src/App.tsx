@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { FacilityProvider, useFacility } from './context/FacilityContext'
 import AppLayout from './components/AppLayout'
 import AuthPage from './pages/AuthPage'
+import InvitationSetupPage from './pages/InvitationSetupPage'
 import FindPage from './pages/FindPage'
 import DashboardPage from './pages/DashboardPage'
 import AssetsPage from './pages/AssetsPage'
@@ -36,6 +37,8 @@ function AppRoutes() {
   const { session, loading: authLoading, passwordRecovery } = useAuth()
   const { currentFacility, currentOrganization, loading: facLoading } = useFacility()
   const location = useLocation()
+
+  if (location.pathname === '/accept-invitation') return <InvitationSetupPage />
 
   if (authLoading || (session && facLoading)) {
     return (

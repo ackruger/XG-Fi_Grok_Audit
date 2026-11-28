@@ -6,3 +6,6 @@ verify_jwt = true
 
 [functions.send-invitation-email]
 verify_jwt = true
+
+[functions.invitation-account]
+verify_jwt = false

@@ -20,25 +20,6 @@ interface FacilityContextType {
 
 const FacilityContext = createContext<FacilityContextType | undefined>(undefined)
 
-async function acceptPendingInvitations(): Promise<boolean> {
-  try {
-    const result = await Promise.race([
-      supabase.rpc('accept_pending_facility_invitations'),
-      new Promise<{ error: { message: string } }>(resolve =>
-        setTimeout(() => resolve({ error: { message: 'Invitation check timed out' } }), 5000)
-      ),
-    ])
-    if (result.error) {
-      console.error('Could not accept pending facility invitations:', result.error.message)
-      return false
-    }
-    return true
-  } catch (error) {
-    console.error('Could not accept pending facility invitations:', error)
-    return false
-  }
-}
-
 export function FacilityProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth()
   const [organizations, setOrganizations] = useState<Organization[]>([])
@@ -162,8 +143,6 @@ export function FacilityProvider({ children }: { children: ReactNode }) {
     setLoading(true)
 
     async function initializeFacilityContext() {
-      await acceptPendingInvitations()
-      if (cancelled) return
       const ok = await fetchData()
       if (cancelled) return
       if (!ok) {

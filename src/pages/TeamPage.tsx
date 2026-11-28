@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useFacility } from '../context/FacilityContext'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -27,6 +27,7 @@ interface InvitationRow {
   status: string
   created_at: string
   invited_by: string
+  expires_at: string
 }
 
 const roleIcons: Record<string, typeof Crown> = {
@@ -55,18 +56,24 @@ export default function TeamPage() {
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
   const [notice, setNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null)
 
-  const canManageTeam = currentUserRole === 'admin' || currentUserRole === 'supervisor'
+  const requestSequence = useRef(0)
+  const [resending, setResending] = useState<string | null>(null)
+  const canManageTeam = currentUserRole === 'admin'
   const isFullAdmin = currentUserRole === 'admin'
 
   useEffect(() => {
-    if (currentFacility) {
-      loadTeamData()
-    }
-  }, [currentFacility, profile?.id])
-
-  async function loadTeamData() {
     if (!currentFacility || !profile?.id) return
-    setLoading(true)
+    void loadTeamData()
+    const refresh = () => { void loadTeamData(false) }
+    const timer = window.setInterval(refresh, 5000)
+    window.addEventListener('focus', refresh)
+    return () => { requestSequence.current += 1; window.clearInterval(timer); window.removeEventListener('focus', refresh) }
+  }, [currentFacility?.id, profile?.id])
+
+  async function loadTeamData(showLoading = true) {
+    if (!currentFacility || !profile?.id) return
+    const sequence = ++requestSequence.current
+    if (showLoading) setLoading(true)
 
     const [membersRes, invitationsRes, roleRes] = await Promise.all([
       supabase
@@ -76,9 +83,8 @@ export default function TeamPage() {
         .order('joined_at', { ascending: true }),
       supabase
         .from('facility_invitations')
-        .select('*')
+        .select('id, email, role, status, created_at, invited_by, expires_at')
         .eq('facility_id', currentFacility.id)
-        .eq('status', 'pending')
         .order('created_at', { ascending: false }),
       supabase.rpc('get_facility_role', {
         p_facility_id: currentFacility.id,
@@ -86,6 +92,8 @@ export default function TeamPage() {
       }),
     ])
 
+    if (sequence !== requestSequence.current) return
+    if (membersRes.error || invitationsRes.error || roleRes.error) setNotice({ tone: 'error', text: 'Could not refresh the team. Please try again.' })
     if (membersRes.data) {
       setMembers(membersRes.data as unknown as MemberRow[])
     }
@@ -97,11 +105,9 @@ export default function TeamPage() {
   }
 
   async function handleRoleChange(memberId: string, newRole: string) {
-    const { error } = await supabase
-      .from('facility_members')
-      .update({ role: newRole })
-      .eq('id', memberId)
-    if (!error) {
+    const { data, error } = await supabase.rpc('set_facility_member_role', { p_member_id: memberId, p_role: newRole })
+    if (error || data !== true) setNotice({ tone: 'error', text: 'Could not change the role. Check your administrator access and try again.' })
+    else {
       setMembers(prev => prev.map(m => m.id === memberId ? { ...m, role: newRole as UserRole } : m))
     }
   }
@@ -111,7 +117,7 @@ export default function TeamPage() {
     setNotice(null)
     const { data, error } = await supabase.rpc('remove_facility_member', { p_member_id: member.id })
     if (error) {
-      setNotice({ tone: 'error', text: `Could not remove ${member.profiles.name || 'this member'}: ${error.message}` })
+      setNotice({ tone: 'error', text: 'Could not remove this member. Check your administrator access and try again.' })
       return
     }
     setMembers(prev => prev.filter(m => m.id !== member.id))
@@ -134,11 +140,24 @@ export default function TeamPage() {
         await loadTeamData()
         return
       }
-      setInvitations(prev => prev.filter(i => i.id !== invitationId))
+      await loadTeamData(false)
     } catch (error) {
       console.error('Invitation cancellation failed', error)
       setNotice({ tone: 'error', text: 'Could not cancel the invitation. Check that you have permission and try again.' })
     }
+  }
+
+  async function handleResend(invitation: InvitationRow) {
+    if (resending || !currentFacility) return
+    setResending(invitation.id)
+    setNotice(null)
+    try {
+      const { error } = await supabase.functions.invoke('send-invitation-email', { body: { email: invitation.email, facilityId: currentFacility.id, role: invitation.role } })
+      setNotice({ tone: error ? 'error' : 'info', text: error ? 'The invitation email could not be sent. Check email delivery settings or try again later.' : 'Invitation resent. The new link expires in seven days; the previous link no longer works.' })
+      await loadTeamData(false)
+    } catch {
+      setNotice({ tone: 'error', text: 'The invitation email could not be sent. Please try again later.' })
+    } finally { setResending(null) }
   }
 
   if (loading) {
@@ -193,7 +212,7 @@ export default function TeamPage() {
             const RoleIcon = roleIcons[member.role] || Eye
             const isSelf = member.user_id === profile?.id
             return (
-              <div key={member.id} className="px-5 py-4 flex items-center gap-4">
+              <div key={member.id} className="px-5 py-4 flex flex-wrap items-center gap-4">
                 <div className="w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center overflow-hidden shrink-0">
                   {member.profiles.avatar_url ? (
                     <img src={member.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
@@ -258,12 +277,12 @@ export default function TeamPage() {
           <div className="px-5 py-3.5 border-b border-neutral-100 bg-neutral-50/50">
             <h2 className="text-sm font-semibold text-neutral-700 flex items-center gap-2">
               <Clock size={15} />
-              Pending Invitations
+              Invitations
             </h2>
           </div>
           <div className="divide-y divide-neutral-100">
             {invitations.map(inv => (
-              <div key={inv.id} className="px-5 py-4 flex items-center gap-4">
+              <div key={inv.id} className="px-5 py-4 flex flex-wrap items-center gap-4">
                 <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
                   <Mail size={16} className="text-amber-600" />
                 </div>
@@ -274,13 +293,15 @@ export default function TeamPage() {
                     {' '}-- {new Date(inv.created_at).toLocaleDateString()}
                   </p>
                 </div>
-                <button
+                <span className="text-xs font-medium text-neutral-700">{inv.status === 'accepted' ? 'Accepted' : inv.status !== 'pending' ? 'Cancelled' : new Date(inv.expires_at).getTime() <= Date.now() ? 'Expired' : 'Pending'}</span>
+                {inv.status === 'pending' && <button disabled={resending !== null} onClick={() => handleResend(inv)} className="text-xs font-medium text-primary-700 disabled:opacity-50">{resending === inv.id ? 'Sending…' : 'Resend Invitation'}</button>}
+                {inv.status === 'pending' && <button
                   onClick={() => handleCancelInvitation(inv.id)}
                   className="p-2 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                   title="Cancel invitation"
                 >
                   <Trash2 size={14} />
-                </button>
+                </button>}
               </div>
             ))}
           </div>
@@ -303,7 +324,6 @@ export default function TeamPage() {
 }
 
 function InviteModal({ facilityId, callerRole, onClose, onInvited }: { facilityId: string; callerRole: string | null; onClose: () => void; onInvited: () => void }) {
-  const { profile } = useAuth()
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<string>('contributor')
   const [sending, setSending] = useState(false)
@@ -323,20 +343,13 @@ function InviteModal({ facilityId, callerRole, onClose, onInvited }: { facilityI
       return
     }
 
-    const { error: insertErr } = await supabase
-      .from('facility_invitations')
-      .insert({
-        facility_id: facilityId,
-        email: trimmedEmail,
-        role,
-        invited_by: profile?.id,
-      })
+    const { error: insertErr } = await supabase.rpc('create_facility_invitation', { p_facility_id: facilityId, p_email: trimmedEmail, p_role: role })
 
     if (insertErr) {
       if (insertErr.code === '23505') {
-        setError('This person already has a pending invitation.')
+        setError('This person is already a member or has an invitation. Use Resend Invitation for an existing invitation.')
       } else {
-        setError(insertErr.message)
+        setError('Could not create the invitation. Check your administrator access and try again.')
       }
       setSending(false)
       return
@@ -356,7 +369,7 @@ function InviteModal({ facilityId, callerRole, onClose, onInvited }: { facilityI
         const body = await ctx.json().catch(() => null)
         if (body && typeof body.error === 'string') reason = ` (${body.error})`
       }
-      setEmailWarning(`Invitation created, but the email could not be delivered${reason}. The person can still accept it by signing in with this email address.`)
+      setEmailWarning(`Invitation created, but the email could not be delivered${reason}. Use Resend Invitation on the Team page to send a new account setup link.`)
       return
     }
 
@@ -381,7 +394,7 @@ function InviteModal({ facilityId, callerRole, onClose, onInvited }: { facilityI
               <Check size={24} className={emailWarning ? 'text-amber-600' : 'text-green-600'} />
             </div>
             <p className="text-sm font-medium text-neutral-900">{emailWarning ? 'Invitation created' : 'Invitation sent!'}</p>
-            <p className="text-xs text-neutral-500 mt-1">They will gain access once they sign in with this email.</p>
+            <p className="text-xs text-neutral-500 mt-1">They will gain access after accepting the invitation link and setting up their account or signing in.</p>
             {emailWarning && (
               <>
                 <p role="alert" className="text-xs text-amber-800 bg-amber-50 rounded-lg px-3 py-2 mt-3">{emailWarning}</p>
@@ -419,7 +432,7 @@ function InviteModal({ facilityId, callerRole, onClose, onInvited }: { facilityI
                 <option value="viewer">Viewer -- Can view assets and cases</option>
                 <option value="contributor">Contributor -- Can add updates and notes</option>
                 <option value="reviewer">Reviewer -- Can review and verify</option>
-                <option value="supervisor">Supervisor -- Can manage team and settings</option>
+                <option value="supervisor">Supervisor -- Can supervise facility work</option>
                 {callerRole === 'admin' && <option value="admin">Admin -- Full access</option>}
               </select>
             </div>
