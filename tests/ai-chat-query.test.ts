@@ -10,8 +10,83 @@ import {
   type ChatMessage,
 } from '../supabase/functions/ai-chat-query/core.ts'
 
+import { rankRecords, formatRecord, searchAcrossFacilities } from '../supabase/functions/ai-chat-query/search.ts'
+
 const FACILITY = '11111111-1111-4111-8111-111111111111'
 const ASSET = '22222222-2222-4222-8222-222222222222'
+
+test('invitation questions rank invitations ahead of general team activity', () => {
+  const records = [
+    { id: '1', kind: 'Activity', facility: 'North', text: 'team activity today' },
+    { id: '2', kind: 'Pending invitation', facility: 'South', text: 'email: invited@example.test; role: viewer' },
+  ]
+  assert.equal(rankRecords(records, 'Tell me who the invited team members are?')[0].id, '2')
+  assert.equal(formatRecord({ facility_id: 'private-id', name: 'Pump', status: 'open' }), 'name: Pump; status: open')
+})
+
+function searchClient(role: string | null, signedIn = true) {
+  const filters: Array<{ table: string; column: string; values: unknown }> = []
+  const tables: string[] = []
+  const client = {
+    auth: { getUser: async () => ({ data: { user: signedIn ? { id: 'user' } : null }, error: null }) },
+    rpc: async (name: string) => ({ data: name === 'get_facility_role' ? role : { allowed: true }, error: null }),
+    from(table: string) {
+      tables.push(table)
+      let start = 0
+      const query = {
+        select() { return query },
+        order() { return query },
+        range(value: number) { start = value; return query },
+        in(column: string, values: unknown) { filters.push({ table, column, values }); return query },
+        is() { return query },
+        eq() { return query },
+        then(resolve: (value: unknown) => unknown) {
+          const data = start ? [] : table === 'facilities'
+            ? [{ id: FACILITY, name: 'North', organization_id: 'org' }]
+            : table === 'facility_invitations' ? [{ id: 'invite', facility_id: FACILITY, email: 'invited@example.test', role: 'viewer' }] : []
+          return Promise.resolve({ data, error: null }).then(resolve)
+        },
+      }
+      return query
+    },
+  }
+  return { client, filters, tables }
+}
+
+test('global search does not query invitations for viewers', async () => {
+  const { client, tables, filters } = searchClient('viewer')
+  const response = await searchAcrossFacilities(req({ question: 'Who is invited?', facility_id: FACILITY }), client, null)
+  const body = await response.json()
+  assert.equal(response.status, 200)
+  assert.equal(tables.includes('facility_invitations'), false)
+  assert.match(body.answer, /No matching readable records/)
+  assert.ok(filters.some(f => f.table === 'assets' && f.column === 'facility_id'))
+})
+
+test('global search shows permitted invitations with facility references', async () => {
+  const { client, filters } = searchClient('admin')
+  const response = await searchAcrossFacilities(req({ question: 'Who is invited?', facility_id: FACILITY }), client, null)
+  const body = await response.json()
+  assert.match(body.answer, /invited@example.test/)
+  assert.match(body.answer, /North/)
+  assert.equal(body.mode, 'local')
+  assert.ok(filters.some(f => f.table === 'facility_invitations' && JSON.stringify(f.values) === JSON.stringify([FACILITY])))
+})
+
+test('global search rejects signed-out users before reading records', async () => {
+  const { client, tables } = searchClient('admin', false)
+  const response = await searchAcrossFacilities(req({ question: 'Who is invited?', facility_id: FACILITY }), client, null)
+  assert.equal(response.status, 401)
+  assert.deepEqual(tables, [])
+})
+
+test('global search excludes facilities without a current membership', async () => {
+  const { client, tables } = searchClient(null)
+  const response = await searchAcrossFacilities(req({ question: 'Who is invited?', facility_id: FACILITY }), client, null)
+  const body = await response.json()
+  assert.match(body.answer, /do not currently have access/)
+  assert.deepEqual(tables, ['facilities'])
+})
 
 function summary(overrides: Record<string, unknown> = {}) {
   return {

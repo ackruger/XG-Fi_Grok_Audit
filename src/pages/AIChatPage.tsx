@@ -7,6 +7,7 @@ import { env } from '../lib/env'
 import { fetchWithTimeout } from '../lib/fetchWithTimeout'
 
 interface MessageSources {
+  cases_referenced: number
   assets_referenced: number
   events_referenced: number
   issues_referenced: number
@@ -22,6 +23,10 @@ interface Message {
   content: string
   timestamp: Date
   sources?: MessageSources | null
+  references?: Array<{ id: string; kind: string; facility: string; text: string }>
+  mode?: 'ai' | 'local'
+  searchLimits?: string
+  coverage?: string[]
 }
 
 export default function AIChatPage() {
@@ -31,10 +36,12 @@ export default function AIChatPage() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null)
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>('all_facilities')
   const [assets, setAssets] = useState<Array<{ id: string; equipment_name: string; asset_tag: string }>>([])
 
   useEffect(() => {
+    setMessages([])
+    setSelectedAssetId('all_facilities')
     if (!currentFacility) {
       setAssets([])
       return
@@ -89,7 +96,7 @@ export default function AIChatPage() {
     try {
       const apiUrl = `${env.SUPABASE_URL}/functions/v1/ai-chat-query`
       const response = await fetchWithTimeout(apiUrl, {
-        timeout: 30000,
+        timeout: 60000,
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session?.access_token}`,
@@ -99,7 +106,8 @@ export default function AIChatPage() {
         body: JSON.stringify({
           question: userMessage.content,
           facility_id: currentFacility.id,
-          asset_id: selectedAssetId || undefined,
+          scope: selectedAssetId === 'all_facilities' ? 'all_facilities' : 'facility',
+          asset_id: selectedAssetId && selectedAssetId !== 'all_facilities' ? selectedAssetId : undefined,
           conversation_history: messages.map(m => ({ role: m.role, content: m.content })),
         }),
       })
@@ -108,12 +116,19 @@ export default function AIChatPage() {
       if (!response.ok) {
         throw new Error(data.error || data.details || 'Failed to get response')
       }
+      if (typeof data.answer !== 'string' || !data.answer.trim()) {
+        throw new Error('The assistant returned an empty answer. Please try again.')
+      }
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
         role: 'assistant',
         content: data.answer || 'No response received.',
         timestamp: new Date(),
         sources: data.sources || null,
+        references: Array.isArray(data.references) ? data.references : undefined,
+        mode: data.mode,
+        searchLimits: data.search_limits,
+        coverage: data.coverage,
       }
       setMessages(prev => [...prev, assistantMessage])
     } catch (err: unknown) {
@@ -138,7 +153,7 @@ export default function AIChatPage() {
           <Sparkles size={18} className="text-primary-600" />
           AI Assistant
         </h1>
-        <p className="text-xs text-neutral-500">Ask questions about your facility assets, progress, and cases</p>
+        <p className="text-xs text-neutral-500">Search information across facilities you have access to</p>
       </div>
 
       {/* Asset scope picker */}
@@ -146,10 +161,12 @@ export default function AIChatPage() {
         <div className="relative">
           <select
             value={selectedAssetId || ''}
-            onChange={e => setSelectedAssetId(e.target.value || null)}
+            onChange={e => { setSelectedAssetId(e.target.value || null); setMessages([]) }}
+            disabled={loading}
             className="w-full text-sm border border-neutral-200 rounded-xl px-3 py-2 bg-neutral-50 appearance-none focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-transparent pr-8"
           >
-            <option value="">All facility assets</option>
+            <option value="all_facilities">All facilities I have access to</option>
+            <option value="">Current facility assets</option>
             {assets.map(a => (
               <option key={a.id} value={a.id}>
                 {a.equipment_name} ({a.asset_tag})
@@ -169,11 +186,11 @@ export default function AIChatPage() {
             </div>
             <h2 className="text-base font-semibold text-neutral-900">Ask Xg-Fi anything</h2>
             <p className="text-sm text-neutral-500 mt-2 max-w-sm mx-auto">
-              I can answer questions about asset status, progress, cases, notes, team activity, and more. Ask follow-up questions — I remember the conversation.
+              Search assets, cases, team members, invitations, notes, checklists, plans, and document descriptions across your accessible facilities. Restricted information stays private.
             </p>
             <div className="mt-6 space-y-2">
               {[
-                "Anything I should know about this asset?",
+                "Who are the invited team members across my facilities?",
                 "What has my team been doing?",
                 "What is outstanding on the 4th floor?",
                 "Show me all blocked assets",
@@ -211,13 +228,29 @@ export default function AIChatPage() {
                 {msg.sources && (
                   <span className="text-xs opacity-70">
                     {[msg.sources.assets_referenced && `${msg.sources.assets_referenced} assets`,
-                      msg.sources.issues_referenced && `${msg.sources.issues_referenced} cases`,
+                      msg.sources.cases_referenced && `${msg.sources.cases_referenced} cases`,
                       msg.sources.notes_referenced && `${msg.sources.notes_referenced} notes`,
                       msg.sources.events_referenced && `${msg.sources.events_referenced} events`
                     ].filter(Boolean).join(' · ')}
                   </span>
                 )}
               </div>
+              {msg.mode && <p className="text-xs text-neutral-600 mt-2">{msg.mode === 'ai' ? 'AI answer' : 'Built-in search · AI unavailable'}</p>}
+              {msg.references && (
+                <details className="mt-2 text-xs text-neutral-700">
+                  <summary className="cursor-pointer font-medium">Search records ({msg.references.length})</summary>
+                  <p className="mt-2 leading-relaxed">{msg.searchLimits}</p>
+                  {msg.coverage && <p className="mt-2 leading-relaxed">{msg.coverage.join(' · ')}</p>}
+                  <ol className="mt-2 space-y-2 max-h-64 overflow-y-auto">
+                    {msg.references.map((record, index) => (
+                      <li key={`${record.kind}-${record.id}`} className="border-t border-neutral-200 pt-2 break-words">
+                        <span className="font-medium">[{index + 1}] {record.kind} · {record.facility}</span>
+                        <p className="mt-1 whitespace-pre-wrap">{record.text}</p>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              )}
             </div>
             {msg.role === 'user' && (
               <div className="w-8 h-8 bg-neutral-200 rounded-full flex items-center justify-center shrink-0">
@@ -250,7 +283,7 @@ export default function AIChatPage() {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about assets, progress, cases..."
+            placeholder="Ask about your facilities, team, assets..."
             disabled={loading}
             className="flex-1 px-4 py-2.5 bg-white border border-neutral-200 rounded-xl text-sm text-neutral-900 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary-400/40 focus:border-primary-400 disabled:opacity-50"
           />

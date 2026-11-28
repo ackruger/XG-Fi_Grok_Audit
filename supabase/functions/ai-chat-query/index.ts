@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
+import { searchAcrossFacilities } from "./search.ts";
 import {
   ASSET_DETAIL_LIMIT,
   CASE_DETAIL_LIMIT,
@@ -31,6 +32,22 @@ Deno.serve(async (req: Request) => {
     const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
     const service = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const openaiKey = Deno.env.get("OPENAI_API_KEY");
+    const callModel = openaiKey ? async (messages: ChatMessage[], signal: AbortSignal) => {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${openaiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "gpt-4o-mini", messages, temperature: 0.4, max_tokens: 1200 }),
+        signal,
+      });
+      if (!response.ok) throw new Error(`Model request failed (${response.status})`);
+      const data = await response.json();
+      const answer = data?.choices?.[0]?.message?.content;
+      return typeof answer === "string" ? answer : "";
+    } : null;
+    if (req.method === "POST") {
+      const body = await req.clone().json().catch(() => null);
+      if (body?.scope === "all_facilities") return await searchAcrossFacilities(req, userClient, callModel);
+    }
     let userId = "";
 
     return await handleChat(req, {
@@ -130,20 +147,7 @@ Deno.serve(async (req: Request) => {
           tags: [],
         };
       },
-      callModel: openaiKey
-        ? async (messages: ChatMessage[], signal: AbortSignal) => {
-          const response = await fetch("https://api.openai.com/v1/chat/completions", {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${openaiKey}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ model: "gpt-4o-mini", messages, temperature: 0.4, max_tokens: 1200 }),
-            signal,
-          });
-          if (!response.ok) throw new Error(`Model request failed (${response.status})`);
-          const data = await response.json();
-          const answer = data?.choices?.[0]?.message?.content;
-          return typeof answer === "string" ? answer : "";
-        }
-        : null,
+      callModel,
     });
   } catch (err) {
     console.error("ai-chat-query failed", err);
