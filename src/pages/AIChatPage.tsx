@@ -121,7 +121,7 @@ export default function AIChatPage() {
       const errorMessage: Message = {
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: `Sorry, I could not process that request: ${message}. Please try again.`,
+        content: message,
         timestamp: new Date(),
       }
       setMessages(prev => [...prev, errorMessage])

@@ -173,9 +173,9 @@ export function truncationNotes(summary: FacilitySummary, details: ChatDetails, 
 function caseLine(c: Row): string {
   const asset = c.assets?.equipment_name ? ` on ${c.assets.equipment_name}` : "";
   const who = c.assigned?.name || "Unassigned";
-  let line = `- ${c.case_number ? `#${c.case_number} ` : ""}[${c.priority || "unspecified"}/${c.status || "unknown"}] "${cut(c.title || c.description, 100)}"${asset}`;
+  let line = `- [${c.priority || "unspecified"}/${c.status || "unknown"}] "${cut(c.title || c.description, 100)}"${asset}`;
   line += ` | Created ${fmtDate(c.created_at)} | Assigned to: ${who}`;
-  if (c.due_date) line += ` | Due: ${fmtDate(c.due_date)}`;
+  if (c.case_type) line += ` | Type: ${c.case_type}`;
   return line;
 }
 
@@ -213,7 +213,7 @@ export function buildContextSummary(summary: FacilitySummary, d: ChatDetails, is
     if (tagNames.length) c += `\n\nAsset Tags: ${tagNames.join(", ")}`;
     if (d.statusHistory.length) {
       c += `\n\nStatus History (${d.statusHistory.length}):\n` + d.statusHistory
-        .map((h) => `- [${fmtDate(h.changed_at)}] ${h.profiles?.name || "Unknown"}: ${h.old_status} -> ${h.new_status}`).join("\n");
+        .map((h) => `- [${fmtDate(h.created_at)}] ${h.profiles?.name || "Unknown"}: ${h.previous_status} -> ${h.new_status}`).join("\n");
     }
   }
 

@@ -11,12 +11,15 @@ import {
 
 // deno-lint-ignore no-explicit-any
 function rows(res: { data: any; error: { message: string } | null }, what: string): any[] {
-  if (res.error) throw new Error(`Could not load ${what}`);
+  if (res.error) {
+    console.error(`Could not load ${what}`, res.error);
+    throw new Error(`Could not load ${what}`);
+  }
   return Array.isArray(res.data) ? res.data : [];
 }
 
 const CASE_SELECT =
-  "id, case_number, title, description, status, priority, category, due_date, created_at, asset_id, assigned:profiles!cases_assigned_to_fkey(name), assets(equipment_name, asset_tag)";
+  "id, case_type, title, description, status, priority, created_at, asset_id, assigned:profiles!cases_assigned_to_fkey(name), assets(equipment_name, asset_tag)";
 const ISSUE_SELECT =
   "id, asset_id, priority, category, description, status, due_date, resolution_notes, created_at, profiles!issues_created_by_fkey(name), assigned:profiles!issues_assigned_to_fkey(name)";
 
@@ -73,7 +76,7 @@ Deno.serve(async (req: Request) => {
             service.from("asset_notes").select("*, profiles(name)").eq("asset_id", assetId)
               .order("created_at", { ascending: false }).limit(30),
             service.from("status_history").select("*, profiles(name)").eq("asset_id", assetId)
-              .order("changed_at", { ascending: false }).limit(30),
+              .order("created_at", { ascending: false }).limit(30),
             service.from("asset_tags").select("tags(name, color)").eq("asset_id", assetId),
           ]);
           const issueRows = rows(issues, "issues");

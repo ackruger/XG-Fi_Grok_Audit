@@ -63,6 +63,22 @@ function req(body: unknown) {
   return new Request('https://x/ai-chat-query', { method: 'POST', body: JSON.stringify(body) })
 }
 
+test('selected asset context uses the current case and status history fields', async () => {
+  let seen: ChatMessage[] = []
+  const res = await handleChat(req({ question: 'What changed?', facility_id: FACILITY, asset_id: ASSET }), deps({
+    loadDetails: async () => details({
+      cases: [{ id: 'c1', title: 'Inspection required', case_type: 'inspection', status: 'open', priority: 'high', created_at: '2026-11-01' }],
+      statusHistory: [{ created_at: '2026-11-02', previous_status: 'not_started', new_status: 'complete', profiles: { name: 'Reviewer' } }],
+    }),
+    callModel: async (messages) => { seen = messages; return 'Inspection required.' },
+  }))
+  assert.equal(res.status, 200)
+  const context = seen.map(message => message.content).join('\n')
+  assert.match(context, /Type: inspection/)
+  assert.match(context, /Reviewer: not_started -> complete/)
+  assert.doesNotMatch(context, /undefined ->/)
+})
+
 test('totals cover all assets, not the 200-asset detail sample', async () => {
   const res = await handleChat(req({ question: 'Give me a progress summary', facility_id: FACILITY }), deps())
   const body = await res.json()
